@@ -7,10 +7,7 @@ Created on Wed Jan 21 09:35:47 2015
 
 from __future__ import division
 import math
-import random
 import Random
-from scipy.stats import norm
-from matplotlib.pyplot import *
 
 def forwardVal(T, K, S, r):
     return(S - K*math.exp(-r*T))
@@ -20,15 +17,15 @@ def optionVal(T, K, callPut, S, r, vol):
     d2 = d1 - vol * T ** 0.5
 
     if callPut == "call":
-        answer = S * normCDF(d1) - K * math.exp(-r*T) * normCDF(d2)
+        answer = S * Random.normCDF(d1) - K * math.exp(-r*T) * Random.normCDF(d2)
     elif callPut == "put":
-        answer = K * math.exp(-r*T) * normCDF(-d2) - S * normCDF(-d1)
+        answer = K * math.exp(-r*T) * Random.normCDF(-d2) - S * Random.normCDF(-d1)
     elif callPut == "straddle":
-        answer = S * normCDF(d1) - K * math.exp(-r*T) * normCDF(d2) + K * math.exp(-r*T) * normCDF(-d2) - S * normCDF(-d1)      
+        answer = S * Random.normCDF(d1) - K * math.exp(-r*T) * Random.normCDF(d2) + K * math.exp(-r*T) * Random.normCDF(-d2) - S * Random.normCDF(-d1)      
     elif callPut == "digCall":
-        answer = math.exp(-r*T) * normCDF(d2)
+        answer = math.exp(-r*T) * Random.normCDF(d2)
     elif callPut == "digPut":
-        answer = math.exp(-r*T) * normCDF(-d2)
+        answer = math.exp(-r*T) * Random.normCDF(-d2)
     elif callPut == "stock":
         answer = S
     elif callPut == "fwd":
@@ -96,9 +93,9 @@ def optionDelta(T, K, callPut, S, r, vol):
     d2 = d1 - vol * T ** 0.5
     
     if callPut == "call":
-        answer = normCDF(d1)
+        answer = Random.normCDF(d1)
     if callPut == "put":
-        answer = normCDF(d1) - 1
+        answer = Random.normCDF(d1) - 1
     if callPut == "digCall":
         answer = math.exp(-r * T) * nPrime(d2) / (S * vol * math.sqrt(T))
     if callPut == "digPut":
@@ -155,16 +152,16 @@ def optionVega(T, K, callPut, S, r, vol):
 def optionTheta(T, K, callPut, S, r, vol):
     d1 = (math.log(S / K) + (r + 0.5 * vol * vol) * T) / (vol * T ** 0.5)
     d2 = d1 - vol * T ** 0.5
-    nPrime = math.exp(-d1 ** 2 / 2) / math.sqrt(2 * pi)
+    nPrime = math.exp(-d1 ** 2 / 2) / math.sqrt(2 * math.pi)
 
     if callPut == "call":
-        term1 = -r * K * math.exp(-r * T) * normCDF(d2)
-        term2 = (vol * S * nPrime) / (2 * sqrt(T))
+        term1 = -r * K * math.exp(-r * T) * Random.normCDF(d2)
+        term2 = (vol * S * nPrime) / (2 * math.sqrt(T))
         answer = term1 - term2
     
     if callPut == "put":
-        term1 = r * K * math.exp(-r * T) * normCDF(-d2)
-        term2 = (vol * S * nPrime) / (2 * sqrt(T))
+        term1 = r * K * math.exp(-r * T) * Random.normCDF(-d2)
+        term2 = (vol * S * nPrime) / (2 * math.sqrt(T))
         answer = term1 - term2
         
     return answer
