@@ -15,6 +15,7 @@ import securities
 import optFuncs
 import pickle
 import dill
+import scipy
 
 from types import FunctionType
 from IPython.utils.pickleutil import can_map
@@ -40,10 +41,10 @@ def runHedgeSimul(S, T, port, r, volFunc, path, hedgeType, debugFlag):
     
     for i in xrange(0, numSteps):
         expiry = T * (1 - i/numSteps)
-        time = T - expiry
+        timeToEnd = T - expiry
         port.updateExpiry(expiry)
 
-        vol = volFunc(time, 1/numSteps)
+        vol = volFunc(timeToEnd, 1/numSteps)
         
         hedge = hedgeType.returnHedge(s_new, r, vol, port)
         
@@ -150,27 +151,67 @@ class gbmPathVolEngine(gbmPathEngine):
         return answer    
 
 class gbmExactPathEngine(gbmPathEngine):
+    def __init__(self, volFunc):
+        self.volFunc = volFunc        
+        self.rnd = Random.randMC(True, False)
     
+    def eulerPath(self, T, S, mu, r, vol, numSteps, numPaths):
+        delta_t = T / numSteps
+        answer = numpy.zeros([numPaths, numSteps])
+        randNumbers = numpy.zeros([numPaths, numSteps])
 
-def evoVol(t, dt):
+        randNumbers = self.rnd.genNormalMatrix(numPaths * numSteps, numPaths, numSteps)        
+        
+        for j in xrange(numPaths):
+            deltaRand = randNumbers[j] * math.sqrt(delta_t)
+                        
+            s_next = 0
+            s_last = S
+            for i in xrange(numSteps):
+                timeToEnd = i * delta_t
+                volRMS = self.volFunc(timeToEnd, delta_t)
+                
+                term1 = (mu - 0.5 * volRMS**2)*delta_t
+                term2 = volRMS * deltaRand[i]                
+                
+                s_next = s_last * math.exp(term1 + term2)
+                s_last = s_next
+                answer[j, i] = s_next
+        
+        return answer
 
-    def tempFunc(t):
-        #return 0.1**2 * t
-        return (0.1 * math.sqrt(3))**2 * (t**3) / 3
+def optionPayoff(vec, strike):
+    answer = 0
+    test = vec[0].size - 1
+    print test
+    for i in xrange(len(vec)):
+        answer = answer + max(vec[i][test] - strike,0)
+    return answer / len(vec)
+
+#return RMS vol
+def rmsVol(t, dt):
+
+    integral = scipy.integrate.quad(stepVol, t, t+dt)[0]
+    return math.sqrt(1/dt * integral)
     
-    return math.sqrt(1 / dt * (tempFunc(t + dt) - tempFunc(t))) 
+#variance
+def stepVol(t):
+    answer = 0
+    if t<0.5:
+        answer =  0.05
+    if t>=0.5:
+        answer =  0.1323
+    return answer**2
 
 #returns vol to use for given t, t is expiry
 def testVol(t, dt):
-
+    return rmsVol(0,1)
     def tempFunc(t):
         return 0.1**2 * t
-        return (0.1 * math.sqrt(3))**2 * (t**3) / 3
+        #return (0.1 * math.sqrt(3))**2 * (t**3) / 3
     
     return math.sqrt(1 / dt * (tempFunc(t + dt) - tempFunc(t)))
 
-def testVol2(t, dt):
-    return 0.1 * math.sqrt(3) * (t+0.001)
 
 #returns an array for gamma hedging
 class hedger:
@@ -188,7 +229,6 @@ class bsHedger(hedger):
     def returnHedge(self, S, r, vol, port):
         bsGamma = 0
 
-        #newPort = copy.deepcopy(port)
         newPort = securities.portfolio(port.returnSec())
 
         if self.gammaHedge == True:
@@ -197,7 +237,6 @@ class bsHedger(hedger):
             bsGamma = -portGamma / atmGamma        
             newSec = securities.call(S, port.returnExpiry(), bsGamma)
             
-            #newPort.addSec([newSec])
             newPort.opt = port.opt + [newSec]
         
         bsDelta = -optFuncs.calcDelta(S, r, vol, newPort)
@@ -250,8 +289,11 @@ class hedgeSimul:
                 import securities
                 import optFuncs
                 import math
+                import scipy
     
-            dview.push(dict(runHedgeSimul = runHedgeSimul))     
+            dview.push(dict(runHedgeSimul = runHedgeSimul))  
+            dview.push(dict(stepVol = stepVol))
+            dview.push(dict(rmsVol = rmsVol))
     
             myDict = dict(S = S, T = T, r = r, vol = vol, port = port, hedgeType = hedgeType, debugFlag = debugFlag)
             dview.push(myDict)
@@ -274,23 +316,19 @@ def conf_int_native(x, ci=0.95):
 
 
 #main
-
-MCengine = gbmPathEngine()
-detVolEngine = gbmPathVolEngine(evoVol)
+detVolEngine = gbmExactPathEngine(rmsVol)
 hdgrDelta = bsHedger(False)
 hdgrGamma = bsHedger(True)
-callOption = securities.call(100, 1, 100)
-callATM = securities.callDigital(100, 1, 100)
-numSims = 1
 
+callOption = securities.call(100, 1, 100)
 secList = [callOption]
 port1 = securities.portfolio(secList)
 
-simSingle = hedgeSimul(100, 0.0, 0.0, testVol, port1, True, False)
+simSingle = hedgeSimul(100, 0.0, 0.0, testVol, port1, False, False)
 simMulti = hedgeSimul(100, 0.0, 0.0, testVol, port1, False, True)
-    
-#test = numpy.array(simSingle.runSim(40, numSims, MCengine, hdgrDelta))
-test = numpy.array(simSingle.runSim(2, numSims, detVolEngine, hdgrDelta))
+
+numSims = 100
+test = numpy.array(simSingle.runSim(400, numSims, detVolEngine, hdgrDelta))
 print "PnL = ", sum(test)/numSims
 print "sd = ", numpy.std(test)
 print "conf = ", conf_int_native(test)
