@@ -44,7 +44,8 @@ def runHedgeSimul(S, T, port, r, volFunc, path, hedgeType, debugFlag):
         timeToEnd = T - expiry
         port.updateExpiry(expiry)
 
-        vol = volFunc(timeToEnd, 1/numSteps)
+        #vol = volFunc(timeToEnd, 1/numSteps)
+        vol = volFunc(timeToEnd, expiry)
         
         hedge = hedgeType.returnHedge(s_new, r, vol, port)
         
@@ -190,7 +191,6 @@ def optionPayoff(vec, strike):
 
 #return RMS vol
 def rmsVol(t, dt):
-
     integral = scipy.integrate.quad(stepVol, t, t+dt)[0]
     return math.sqrt(1/dt * integral)
     
@@ -205,7 +205,8 @@ def stepVol(t):
 
 #returns vol to use for given t, t is expiry
 def testVol(t, dt):
-    return rmsVol(0,1)
+    return rmsVol(t,t+dt)
+    
     def tempFunc(t):
         return 0.1**2 * t
         #return (0.1 * math.sqrt(3))**2 * (t**3) / 3
@@ -328,7 +329,7 @@ simSingle = hedgeSimul(100, 0.0, 0.0, testVol, port1, False, False)
 simMulti = hedgeSimul(100, 0.0, 0.0, testVol, port1, False, True)
 
 numSims = 100
-test = numpy.array(simSingle.runSim(400, numSims, detVolEngine, hdgrDelta))
+test = numpy.array(simMulti.runSim(400, numSims, detVolEngine, hdgrDelta))
 print "PnL = ", sum(test)/numSims
 print "sd = ", numpy.std(test)
 print "conf = ", conf_int_native(test)
