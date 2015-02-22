@@ -162,4 +162,4 @@ def plotZero(start, tenor, curve):
     plot(dates, zeros)
     return
 
-#curveJan = curveBuild('2015-01-30')
+curveJan = curveBuild('2015-01-30')

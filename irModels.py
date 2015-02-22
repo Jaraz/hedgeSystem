@@ -187,18 +187,19 @@ class hullWhite:
     def __init__(self, meanLevel, meanSpeed, sigma, curve):
         self.sigma = sigma
         self.curve = curve
-        self.r0 = self.spotR(0)
+        self.r0 = self.spotFwd(0)
         self.meanLevel = meanLevel
         self.meanSpeed = meanSpeed
         self.rnd = Random.randMC(False, False)    
 
-    def spotR(self,t):
-        #if t == 0:
-        #    t =0.000001
+    def spotFwd(self,t):
         lnP = lambda x: numpy.log(yieldCurve.curveInterp(x, self.curve))
         
-        return -scipy.misc.derivative(lnP, t)        
+        return -scipy.misc.derivative(lnP, t)
 
+    def alpha(self, t):
+        return self.spotFwd(t) + self.sigma**2/(2*self.meanSpeed**2) * (1 - numpy.exp(-self.meanSpeed * t))**2
+ 
     def B(self,t, T):
         return (1 - numpy.exp(-self.meanSpeed * (T-t))) / self.meanSpeed
         
@@ -234,7 +235,7 @@ class hullWhite:
     def eulerPath(self, evoTime, strike, paths, steps):
         dt = evoTime / steps
         vol = self.sigma * numpy.sqrt(dt)
-        
+        temp = numpy.zeros(steps+1)        
         discount = 0 
         r_last = self.r0        
         
@@ -243,20 +244,25 @@ class hullWhite:
         answer = 0
         answerVec = numpy.zeros(steps+1)
 
+
         answerVec[0] = self.r0
 
         #build r0 vector
         for i in xrange(steps+1):
-            rVector[i] = self.spotR(i * dt)
+            t = (i)*dt
+            rVector[i] = self.spotFwd(i*dt)
+            temp[i] = self.sigma**2 / (2 * self.meanSpeed) * (1 - numpy.exp(-2 * self.meanSpeed * t))
 
         for j in xrange(paths):
             discount = 0         
             r_last = self.r0
             rndNumbers = self.rnd.genNormal(steps)
-
+            x_last = 0                
+                
             for i in xrange(steps):
-                term = self.meanSpeed * (rVector[i] - r_last)
-                r_next = r_last + rVector[i+1] - rVector[i] + term * dt + vol * rndNumbers[i]
+                x_next = x_last +temp[i+1]-temp[i] - self.meanSpeed * x_last * dt + self.sigma * numpy.sqrt(dt) * rndNumbers[i]            
+                x_last = x_next                
+                r_next = x_next + rVector[i+1]
     
                 discount += (r_next + r_last)/2
                 r_last = r_next
@@ -270,7 +276,9 @@ class hullWhite:
         
     def exactPath(self, evoTime, strike, paths, steps):
         dt = evoTime / steps
-        vol =  numpy.sqrt(dt) * numpy.sqrt(self.sigma**2 / (2 * self.meanSpeed) * (1 - numpy.exp(-2 * self.meanSpeed * dt)))
+        vol =  numpy.sqrt(self.sigma**2 / (2 * self.meanSpeed) * (1 - numpy.exp(-2 * self.meanSpeed * dt)))
+        #term = self.sigma**2/(3*self.meanSpeed) * (1 - numpy.exp(-3*self.meanSpeed*dt))
+        temp = numpy.zeros(steps+1)      
         
         discount = 0 
         r_last = self.r0        
@@ -278,36 +286,41 @@ class hullWhite:
         rVector = numpy.zeros(steps+1)
 
         answer = 0
-        answerVec = numpy.zeros(steps+1)
-
-        answerVec[0] = self.r0
 
         #build r0 vector
         for i in xrange(steps+1):
-            rVector[i] = self.spotR(i * dt)
+            t = (i+1) * dt            
+            s = (i) * dt            
+            rVector[i] = self.spotFwd(i*dt)
+            temp[i] = self.sigma**2/(2*self.meanSpeed**2) * ((1 - numpy.exp(-self.meanSpeed*dt)) - (numpy.exp(-2*self.meanSpeed*t) - numpy.exp(-3*self.meanSpeed*t + self.meanSpeed*s)))
 
         for j in xrange(paths):
             discount = 0         
             r_last = self.r0
             rndNumbers = self.rnd.genNormal(steps)
-
+            x_last = 0
             for i in xrange(steps):
-                term = numpy.exp(-self.meanSpeed * dt) * (r_last - rVector[i])
-                r_next = rVector[i+1] + term + vol * rndNumbers[i]
-    
+                x_next = x_last * numpy.exp(-self.meanSpeed * dt) + temp[i] + vol * rndNumbers[i]
+                x_last = x_next
+                r_next = x_next + rVector[i+1]
+                #term = r_last * numpy.exp(-self.meanSpeed * dt) + rVector[i+1] - rVector[i] * numpy.exp(-self.meanSpeed*dt)
+                        
+                #r_next = term + vol * rndNumbers[i]
+                
+                #print r_last, term, vol, rVector[i], rVector[i+1], r_next
                 discount += (r_next + r_last)/2
                 r_last = r_next
-                answerVec[i+1] = r_next
             
             answer += numpy.exp(-discount*dt)
             #self.plotTCurve(r_next, 10, 30)
         
         return answer / paths
 
-model = hullWhite(0.03, 0.06, 0.0, curveJan)
+model = hullWhite(0.03, .1, 0.01, curveJan)
 
 #spot curve
-model.plotTCurve(model.spotR(0), 0, 30)
-
-print "Euler = ",model.eulerPath(10, 0, 1, 2000)
-print "Exact = ",model.exactPath(10, 0, 1, 800)
+#model.plotTCurve(model.spotR(0), 0, 30)
+endDate = 5
+print "Analytic = ", yieldCurve.curveInterp(endDate, curveJan)
+print "Euler = ", model.eulerPath(endDate, 0, 100000, 200)
+print "Exact = ", model.exactPath(endDate, 0, 100000, 200)
