@@ -182,33 +182,43 @@ class vasicek:
         plot(dates[0:numFwds],fwds)
 
 
-#Implemented from Andersen and Piterbarg
+
 class hullWhite:
-    def __init__(self, meanSpeed, sigma, curve):
+    def __init__(self, meanLevel, meanSpeed, sigma, curve):
         self.sigma = sigma
         self.curve = curve
         self.r0 = self.spotFwd(0)
+        self.meanLevel = meanLevel
         self.meanSpeed = meanSpeed
         self.rnd = Random.randMC(False, False)    
 
     def spotFwd(self,t):
         lnP = lambda x: numpy.log(yieldCurve.curveInterp(x, self.curve))
+        
         return -scipy.misc.derivative(lnP, t)
+
+    def alpha(self, t):
+        return self.spotFwd(t) + self.sigma**2/(2*self.meanSpeed**2) * (1 - numpy.exp(-self.meanSpeed * t))**2
  
-    def G(self,t, T):
+    def B(self,t, T):
         return (1 - numpy.exp(-self.meanSpeed * (T-t))) / self.meanSpeed
         
-    def bondPrice(self, x, t, T):
+    def A(self,t, T):
         Pt = yieldCurve.curveInterp(t, self.curve)
-        PT = yieldCurve.curveInterp(T, self.curve)        
-        GVar = self.G(t,T)
-        y = self.sigma**2 / (2 * self.meanSpeed) * (1 - numpy.exp(-2*self.meanSpeed*t))
-
-        P = PT/Pt * numpy.exp(-x * GVar - 0.5 * y * GVar**2)
+        PT = yieldCurve.curveInterp(T, self.curve)
+        
+        term1 = self.B(t, T) * self.spotR(t)
+        term2 = self.sigma**2 / (4 * self.meanSpeed) * (1 - numpy.exp(-2 * self.meanSpeed*t)) * self.B(t,T)**2
+        
+        return PT/Pt * numpy.exp(term1 - term2)
+    
+    def bondPrice(self, r, t, T):
+        
+        P = self.A(t,T) * numpy.exp(-self.B(t,T) * r)
         
         return P
 
-    def plotTCurve(self, x, t, T):
+    def plotTCurve(self, r, t, T):
         numFwds = int((T-t)*4 - 1)
         dates = numpy.zeros(numFwds+1)        
         fwds = numpy.zeros(numFwds)
@@ -217,7 +227,7 @@ class hullWhite:
 
         for i in xrange(numFwds):
             dates[i+1] = t + (i+1) * 0.25
-            fwds[i] = 1 / 0.25 * (self.bondPrice(x, t, dates[i]) / self.bondPrice(x, t, dates[i+1]) - 1)
+            fwds[i] = 1 / 0.25 * (self.bondPrice(r, t, dates[i]) / self.bondPrice(r, t, dates[i+1]) - 1)
         
         pyplot.plot(dates[0:numFwds],fwds)
 
@@ -263,14 +273,12 @@ class hullWhite:
         
         return answer / paths
 
-    #risk neutral numeraire
+        
     def exactPath(self, evoTime, strike, paths, steps):
         dt = evoTime / steps
         vol =  numpy.sqrt(self.sigma**2 / (2 * self.meanSpeed) * (1 - numpy.exp(-2 * self.meanSpeed * dt)))
         #term = self.sigma**2/(3*self.meanSpeed) * (1 - numpy.exp(-3*self.meanSpeed*dt))
-        y = numpy.zeros(steps+1)
-        yIntegral = numpy.zeros(steps+2)      
-        yDoubleIntegral = numpy.zeros(steps+2)
+        temp = numpy.zeros(steps+1)      
         
         discount = 0 
         r_last = self.r0        
@@ -278,44 +286,22 @@ class hullWhite:
         rVector = numpy.zeros(steps+1)
 
         answer = 0
-        
 
-        #precompute step
+        #build r0 vector
         for i in xrange(steps+1):
             t = (i+1) * dt            
-            s = (i) * dt
+            s = (i) * dt            
             rVector[i] = self.spotFwd(i*dt)
-            y[i] = self.sigma**2/(2 * self.meanSpeed) * (1 - numpy.exp(-2*self.meanSpeed*s))
-            yIntegral[i] = self.sigma**2/(2*self.meanSpeed**2) * ((1 - numpy.exp(-self.meanSpeed*dt)) + (numpy.exp(-2*self.meanSpeed*t) - numpy.exp(-self.meanSpeed*t - self.meanSpeed*s)))
-            
-            yTerm1 = t - s
-            yTerm2 = 1 / self.meanSpeed * (numpy.exp(-self.meanSpeed * (t-s)) - 1)
-            yTerm3 =-1 / (2 * self.meanSpeed) * (numpy.exp(-2*self.meanSpeed*t) - numpy.exp(-2 * self.meanSpeed * s))
-            yTerm4 = 1 / (self.meanSpeed) * (numpy.exp(-self.meanSpeed*t - self.meanSpeed*s) - numpy.exp(-2*self.meanSpeed*s))
-            #yDoubleIntegral[i] = (yIntegral[i] + yIntegral[i+1])/2 * dt
-            yDoubleIntegral[i] = self.sigma**2 / (2*self.meanSpeed**2) * (yTerm1 + yTerm2 + yTerm3 + yTerm4)
-
-        #for i in xrange(steps):        
-            #print yIntegral[i], (yIntegral[i] + yIntegral[i+1])/2 * dt, yDoubleIntegral[i]
+            temp[i] = self.sigma**2/(2*self.meanSpeed**2) * ((1 - numpy.exp(-self.meanSpeed*dt)) - (numpy.exp(-2*self.meanSpeed*t) - numpy.exp(-3*self.meanSpeed*t + self.meanSpeed*s)))
 
         for j in xrange(paths):
             discount = 0         
             r_last = self.r0
             rndNumbers = self.rnd.genNormal(steps)
-            rndNumbers2 = self.rnd.genNormal(steps)
             x_last = 0
-            I_last = 0
-            
-            
             for i in xrange(steps):
-                x_next = x_last * numpy.exp(-self.meanSpeed * dt) + yIntegral[i] + vol * rndNumbers[i]
-
-                IVariance = 2 * yDoubleIntegral[i] - y[i] * self.G(i*dt, (i+1)*dt)**2
-                I_next = I_last - x_last * self.G(i*dt, (i+1)*dt) - yDoubleIntegral[i] + numpy.sqrt(IVariance) * rndNumbers2[i]
-                #print I_next, I_last, 2 * yDoubleIntegral[i], y[i] * self.G(i*dt, (i+1)*dt)**2
-                x_last = x_next 
-                I_last = I_next
-                
+                x_next = x_last * numpy.exp(-self.meanSpeed * dt) + temp[i] + vol * rndNumbers[i]
+                x_last = x_next
                 r_next = x_next + rVector[i+1]
                 #term = r_last * numpy.exp(-self.meanSpeed * dt) + rVector[i+1] - rVector[i] * numpy.exp(-self.meanSpeed*dt)
                         
@@ -325,19 +311,16 @@ class hullWhite:
                 discount += (r_next + r_last)/2
                 r_last = r_next
             
-            #answer += numpy.exp(-discount*dt)
-            answer += numpy.exp(I_next)
-        
+            answer += numpy.exp(-discount*dt)
             #self.plotTCurve(r_next, 10, 30)
         
         return answer / paths
 
-model = hullWhite(.1, 0.01, curveJan)
+model = hullWhite(0.03, .1, 0.01, curveJan)
 
 #spot curve
 #model.plotTCurve(model.spotR(0), 0, 30)
 endDate = 5
 print "Analytic = ", yieldCurve.curveInterp(endDate, curveJan)
-print "Implied =  ", model.bondPrice(0, 0, endDate)
-print "Euler =    ", model.eulerPath(endDate, 0, 5, 200)
-print "Exact =    ", model.exactPath(endDate, 0, 100, 1)
+print "Euler = ", model.eulerPath(endDate, 0, 100000, 200)
+print "Exact = ", model.exactPath(endDate, 0, 100000, 200)
