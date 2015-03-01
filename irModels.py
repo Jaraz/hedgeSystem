@@ -277,7 +277,7 @@ class hullWhite:
             x_last = 0                
                 
             for i in xrange(steps):
-                x_next = x_last +temp[i+1]-temp[i] - self.meanSpeed * x_last * dt + self.sigma * numpy.sqrt(dt) * rndNumbers[i]            
+                x_next = x_last +temp[i+1]-temp[i] - self.meanSpeed * x_last * dt + vol * rndNumbers[i]            
                 x_last = x_next                
                 r_next = x_next + rVector[i+1]
     
@@ -299,7 +299,6 @@ class hullWhite:
         yIntegral = numpy.zeros(steps+2)      
         yDoubleIntegral = numpy.zeros(steps+2)
         covariance = numpy.zeros(steps+1)
-        rVector = numpy.zeros(steps+1)
 
         answer = 0
         
@@ -307,10 +306,8 @@ class hullWhite:
         for i in xrange(steps+1):
             t = (i+1) * dt            
             s = (i) * dt
-            rVector[i] = self.spotFwd(i*dt)
             y[i] = self.sigma**2/(2 * self.meanSpeed) * (1 - numpy.exp(-2*self.meanSpeed*s))
             yIntegral[i] = self.sigma**2/(2*self.meanSpeed**2) * ((1 - numpy.exp(-self.meanSpeed*dt)) + (numpy.exp(-2*self.meanSpeed*t) - numpy.exp(-self.meanSpeed*t - self.meanSpeed*s)))
-            
             yTerm1 = t - s
             yTerm2 = 1 / self.meanSpeed * (numpy.exp(-self.meanSpeed * (t-s)) - 1)
             yTerm3 =-1 / (2 * self.meanSpeed) * (numpy.exp(-2*self.meanSpeed*t) - numpy.exp(-2 * self.meanSpeed * s))
@@ -334,20 +331,25 @@ class hullWhite:
                 corr = covariance[i] / (vol * IVariance)
                 rndCorr = rndNumbers[i] * corr + numpy.sqrt(1-corr**2) * rndNumbers2[i]
                 
-                I_next = I_last - x_last * self.G(i*dt, (i+1)*dt) - yDoubleIntegral[i] + IVariance* rndCorr
+                print vol,IVariance, yDoubleIntegral[i], x_next, corr, covariance[i]
+                
+                I_next = I_last - x_last * self.G(i*dt, (i+1)*dt) - yDoubleIntegral[i] + IVariance * rndCorr
 
                 x_last = x_next 
                 I_last = I_next
 
-            answer += numpy.exp(I_next) * self.bondPrice(x_next,0,evoTime)#* max(self.bondPrice(x_next, evoTime, evoTime+0.25) - 1 / (1 + 0.25 * strike),0)
+            #answer += numpy.exp(I_next) * max(1 / (1 + 0.25 * strike) -self.bondPrice(x_next, evoTime, evoTime+0.25),0)
+
+            answer += numpy.exp(I_next) * ((1 / self.bondPrice(x_next, evoTime, evoTime+0.25) - 1)/0.25-strike)
         
+        #return self.curve.discFact(evoTime) * answer / paths * 10000
         return answer / paths * 10000
 
-model = hullWhite(.1, 0.0025, curveJ)
+model = hullWhite(.1, .01, curveJ)
 
 #spot curve
 #model.plotTCurve(0, 0, 30)
-endDate = 10
+endDate = 5
 #print "Analytic    =  ", model.optionPricer(endDate, 0.02131963, "Cap") * 10000
-print "Analytic    =  ", curveJ.discFact(10)
-print "Monte Carlo =  ", model.exactPath(endDate, 0.02131963, 100000, 1)
+print "Analytic    =  ", model.bondPrice(0,10,10.25)
+print "Monte Carlo =  ", model.exactPath(endDate, 0.020919083, 10, 1)
