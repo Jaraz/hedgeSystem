@@ -21,7 +21,10 @@ class yieldCurve:
         temp[0] = 0
         self.zeroCurve = interpolate.PchipInterpolator(self.curve[0], temp)
         
+        
     def discFact(self, t):
+        if t < 0 :
+            return 1
         return numpy.exp(-self.zeroCurve(t)*t)
 
 #pull swap data for a date

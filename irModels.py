@@ -252,43 +252,42 @@ class hullWhite:
     def eulerPath(self, evoTime, strike, paths, steps):
         dt = evoTime / steps
         vol = self.sigma * numpy.sqrt(dt)
-        temp = numpy.zeros(steps+1)        
+        y = numpy.zeros(steps+1)        
         discount = 0 
         r_last = self.r0        
         
         rVector = numpy.zeros(steps+1)
 
         answer = 0
-        answerVec = numpy.zeros(steps+1)
-
-
-        answerVec[0] = self.r0
 
         #build r0 vector
         for i in xrange(steps+1):
             t = (i)*dt
             rVector[i] = self.spotFwd(i*dt)
-            temp[i] = self.sigma**2 / (2 * self.meanSpeed) * (1 - numpy.exp(-2 * self.meanSpeed * t))
+            y[i] = self.sigma**2 / (2 * self.meanSpeed) * (1 - numpy.exp(-2 * self.meanSpeed * t))
 
         for j in xrange(paths):
             discount = 0         
             r_last = self.r0
             rndNumbers = self.rnd.genNormal(steps)
             x_last = 0                
+            I_last = 0
                 
             for i in xrange(steps):
-                x_next = x_last +temp[i+1]-temp[i] - self.meanSpeed * x_last * dt + vol * rndNumbers[i]            
-                x_last = x_next                
+                #x_next = x_last + y[i+1] - y[i] - self.meanSpeed * x_last * dt + vol * rndNumbers[i]            
+                x_next = numpy.exp(-self.meanSpeed*dt) * x_last + (1 - numpy.exp(-self.meanSpeed*dt))/self.meanSpeed * y[i] + vol * rndNumbers[i]            
+                I_next = I_last - x_next * dt
+                x_last = x_next
                 r_next = x_next + rVector[i+1]
-    
+
                 discount += (r_next + r_last)/2
                 r_last = r_next
-                answerVec[i+1] = r_next
+                I_last = I_next
             
-            answer += numpy.exp(-discount*dt)
-            #self.plotTCurve(r_next, 10, 30)
+            #answer += numpy.exp(-discount*dt)
+            answer += ((1 / self.bondPrice(x_next, evoTime, evoTime+0.25) - 1)/0.25-strike) #numpy.exp(-discount*dt)
         
-        return answer / paths
+        return answer / paths * 10000
 
     #risk neutral numeraire
     def exactPath(self, evoTime, strike, paths, steps):
@@ -331,7 +330,7 @@ class hullWhite:
                 corr = covariance[i] / (vol * IVariance)
                 rndCorr = rndNumbers[i] * corr + numpy.sqrt(1-corr**2) * rndNumbers2[i]
                 
-                print vol,IVariance, yDoubleIntegral[i], x_next, corr, covariance[i]
+                #print vol,IVariance, yDoubleIntegral[i], x_next, corr, covariance[i]
                 
                 I_next = I_last - x_last * self.G(i*dt, (i+1)*dt) - yDoubleIntegral[i] + IVariance * rndCorr
 
@@ -345,11 +344,12 @@ class hullWhite:
         #return self.curve.discFact(evoTime) * answer / paths * 10000
         return answer / paths * 10000
 
-model = hullWhite(.1, .01, curveJ)
+model = hullWhite(.01, .01, curveJ)
 
 #spot curve
 #model.plotTCurve(0, 0, 30)
 endDate = 5
 #print "Analytic    =  ", model.optionPricer(endDate, 0.02131963, "Cap") * 10000
-print "Analytic    =  ", model.bondPrice(0,10,10.25)
-print "Monte Carlo =  ", model.exactPath(endDate, 0.020919083, 10, 1)
+print "Analytic    =  ", model.bondPrice(0,0,5)
+print "Euler MC    =  ", model.eulerPath(endDate, 0.020919083, 10000, 100)
+print "Monte Carlo =  ", model.exactPath(endDate, 0.020919083, 10000, 1)
