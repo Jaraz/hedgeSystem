@@ -192,15 +192,15 @@ class hullWhite:
         self.rnd = Random.randMC(False, False)    
 
     def spotFwd(self,t):
-        lnP = lambda x: numpy.log(yieldCurve.curveInterp(x, self.curve))
+        lnP = lambda x: numpy.log(self.curve.discFact(x))
         return -scipy.misc.derivative(lnP, t)
  
     def G(self,t, T):
         return (1 - numpy.exp(-self.meanSpeed * (T-t))) / self.meanSpeed
         
     def bondPrice(self, x, t, T):
-        Pt = yieldCurve.curveInterp(t, self.curve)
-        PT = yieldCurve.curveInterp(T, self.curve)        
+        Pt = self.curve.discFact(t)
+        PT = self.curve.discFact(T)
         GVar = self.G(t,T)
         y = self.sigma**2 / (2 * self.meanSpeed) * (1 - numpy.exp(-2*self.meanSpeed*t))
 
@@ -221,6 +221,33 @@ class hullWhite:
         
         pyplot.plot(dates[0:numFwds],fwds)
 
+    def cov(self, ti, ti1, sigma, a):
+        term1 = 1 - numpy.exp(-a * (ti1-ti))
+        term2 = numpy.exp(-2*a*(ti1-ti)) - numpy.exp(-a*(ti1-ti))
+    
+        return sigma**2 / (2*a*a)*(term1+term2)
+        
+    def optionPricer(self, expiry, strike, optType):
+        #convert strike from bps to DF
+        adjStrike = 1 / (1 + 0.25 * strike)
+        
+        ptMat = self.curve.discFact(expiry + 0.25)
+        pt    = self.curve.discFact(expiry)
+        
+        h = (1 - numpy.exp(-self.meanSpeed*0.25)) / self.meanSpeed
+        
+        vol = self.sigma * h * numpy.sqrt(1 / (2*self.meanSpeed) * (1 - numpy.exp(-2*self.meanSpeed*expiry)))
+        
+        d1 = 1 / vol * numpy.log(ptMat / (pt * adjStrike)) + vol / 2
+        d2 = d1 - vol
+        
+        if optType == "Cap":
+            return ptMat * Random.normCDF(d1) - adjStrike * pt * Random.normCDF(d2)
+        elif optType == "Floor":
+            return adjStrike * pt * Random.normCDF(-d2) - ptMat * Random.normCDF(-d1)
+        
+        return 999
+        
         
     def eulerPath(self, evoTime, strike, paths, steps):
         dt = evoTime / steps
@@ -267,19 +294,15 @@ class hullWhite:
     def exactPath(self, evoTime, strike, paths, steps):
         dt = evoTime / steps
         vol =  numpy.sqrt(self.sigma**2 / (2 * self.meanSpeed) * (1 - numpy.exp(-2 * self.meanSpeed * dt)))
-        #term = self.sigma**2/(3*self.meanSpeed) * (1 - numpy.exp(-3*self.meanSpeed*dt))
+        
         y = numpy.zeros(steps+1)
         yIntegral = numpy.zeros(steps+2)      
         yDoubleIntegral = numpy.zeros(steps+2)
-        
-        discount = 0 
-        r_last = self.r0        
-        
+        covariance = numpy.zeros(steps+1)
         rVector = numpy.zeros(steps+1)
 
         answer = 0
         
-
         #precompute step
         for i in xrange(steps+1):
             t = (i+1) * dt            
@@ -292,15 +315,12 @@ class hullWhite:
             yTerm2 = 1 / self.meanSpeed * (numpy.exp(-self.meanSpeed * (t-s)) - 1)
             yTerm3 =-1 / (2 * self.meanSpeed) * (numpy.exp(-2*self.meanSpeed*t) - numpy.exp(-2 * self.meanSpeed * s))
             yTerm4 = 1 / (self.meanSpeed) * (numpy.exp(-self.meanSpeed*t - self.meanSpeed*s) - numpy.exp(-2*self.meanSpeed*s))
-            #yDoubleIntegral[i] = (yIntegral[i] + yIntegral[i+1])/2 * dt
             yDoubleIntegral[i] = self.sigma**2 / (2*self.meanSpeed**2) * (yTerm1 + yTerm2 + yTerm3 + yTerm4)
+            
+            covariance[i] = self.cov(s, t, self.sigma, self.meanSpeed)
 
-        #for i in xrange(steps):        
-            #print yIntegral[i], (yIntegral[i] + yIntegral[i+1])/2 * dt, yDoubleIntegral[i]
 
         for j in xrange(paths):
-            discount = 0         
-            r_last = self.r0
             rndNumbers = self.rnd.genNormal(steps)
             rndNumbers2 = self.rnd.genNormal(steps)
             x_last = 0
@@ -310,34 +330,24 @@ class hullWhite:
             for i in xrange(steps):
                 x_next = x_last * numpy.exp(-self.meanSpeed * dt) + yIntegral[i] + vol * rndNumbers[i]
 
-                IVariance = 2 * yDoubleIntegral[i] - y[i] * self.G(i*dt, (i+1)*dt)**2
-                I_next = I_last - x_last * self.G(i*dt, (i+1)*dt) - yDoubleIntegral[i] + numpy.sqrt(IVariance) * rndNumbers2[i]
-                #print I_next, I_last, 2 * yDoubleIntegral[i], y[i] * self.G(i*dt, (i+1)*dt)**2
+                IVariance = numpy.sqrt(2 * yDoubleIntegral[i] - y[i] * self.G(i*dt, (i+1)*dt)**2)
+                corr = covariance[i] / (vol * IVariance)
+                rndCorr = rndNumbers[i] * corr + numpy.sqrt(1-corr**2) * rndNumbers2[i]
+                
+                I_next = I_last - x_last * self.G(i*dt, (i+1)*dt) - yDoubleIntegral[i] + IVariance* rndCorr
+
                 x_last = x_next 
                 I_last = I_next
-                
-                r_next = x_next + rVector[i+1]
-                #term = r_last * numpy.exp(-self.meanSpeed * dt) + rVector[i+1] - rVector[i] * numpy.exp(-self.meanSpeed*dt)
-                        
-                #r_next = term + vol * rndNumbers[i]
-                
-                #print r_last, term, vol, rVector[i], rVector[i+1], r_next
-                discount += (r_next + r_last)/2
-                r_last = r_next
-            
-            #answer += numpy.exp(-discount*dt)
-            answer += numpy.exp(I_next)
-        
-            #self.plotTCurve(r_next, 10, 30)
-        
-        return answer / paths
 
-model = hullWhite(.1, 0.01, curveJan)
+            answer += numpy.exp(I_next) * self.bondPrice(x_next,0,evoTime)#* max(self.bondPrice(x_next, evoTime, evoTime+0.25) - 1 / (1 + 0.25 * strike),0)
+        
+        return answer / paths * 10000
+
+model = hullWhite(.1, 0.0025, curveJ)
 
 #spot curve
-#model.plotTCurve(model.spotR(0), 0, 30)
-endDate = 5
-print "Analytic = ", yieldCurve.curveInterp(endDate, curveJan)
-print "Implied =  ", model.bondPrice(0, 0, endDate)
-print "Euler =    ", model.eulerPath(endDate, 0, 5, 200)
-print "Exact =    ", model.exactPath(endDate, 0, 100, 1)
+#model.plotTCurve(0, 0, 30)
+endDate = 10
+#print "Analytic    =  ", model.optionPricer(endDate, 0.02131963, "Cap") * 10000
+print "Analytic    =  ", curveJ.discFact(10)
+print "Monte Carlo =  ", model.exactPath(endDate, 0.02131963, 100000, 1)

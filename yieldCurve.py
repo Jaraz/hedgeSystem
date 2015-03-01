@@ -14,6 +14,16 @@ from scipy import interpolate
 from scipy import optimize
 fred = Fred(api_key='ba6be791f155502772efcac065904210')
 
+class yieldCurve:
+    def __init__(self, inputDate):
+        self.curve = curveBuild(inputDate)
+        temp = -numpy.log(self.curve[1])/self.curve[0]
+        temp[0] = 0
+        self.zeroCurve = interpolate.PchipInterpolator(self.curve[0], temp)
+        
+    def discFact(self, t):
+        return numpy.exp(-self.zeroCurve(t)*t)
+
 #pull swap data for a date
 def pullSwapData(inputDate):
     swapArray = numpy.zeros(9)
@@ -163,3 +173,4 @@ def plotZero(start, tenor, curve):
     return
 
 #curveJan = curveBuild('2015-01-30')
+#curveJ = yieldCurve('2015-01-30')
