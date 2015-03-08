@@ -189,7 +189,7 @@ class hullWhite:
         self.curve = curve
         self.r0 = self.spotFwd(0)
         self.meanSpeed = meanSpeed
-        self.rnd = Random.randMC(False, False)    
+        self.rnd = Random.randMC(True, False)    
 
     def spotFwd(self,t):
         lnP = lambda x: numpy.log(self.curve.discFact(x))
@@ -238,7 +238,7 @@ class hullWhite:
         term1 = 1 - numpy.exp(-a * (ti1-ti))
         term2 = numpy.exp(-2*a*(ti1-ti)) - numpy.exp(-a*(ti1-ti))
     
-        return sigma**2 / (2*a*a)*(term1+term2)
+        return -sigma**2 / (2*a*a)*(term1+term2)
         
     def optionPricer(self, expiry, strike, optType):
         #convert strike from bps to DF
@@ -299,7 +299,8 @@ class hullWhite:
         y = numpy.zeros(steps+1)
         yIntegral = numpy.zeros(steps+2)      
         covariance = numpy.zeros(steps+1)
-
+        rndMatrix1 = self.rnd.genNormalMatrix(paths*steps, paths, steps)
+        rndMatrix2 = self.rnd.genNormalMatrix(paths*steps, paths, steps)
         answer = 0
         
         #precompute step
@@ -314,25 +315,20 @@ class hullWhite:
 
 
         for j in xrange(paths):
-            rndNumbers  = self.rnd.genNormal(steps)
-            rndNumbers2 = self.rnd.genNormal(steps)
             x_last = 0
             I_last = 0
             
             for i in xrange(steps):
                 IVol = numpy.sqrt(IVariance[i])
                 corr = covariance[i] / (vol * IVol)
-                corrMatrix = numpy.matrix([[1, corr],[corr,1]])
 
-                rndVec = numpy.array((rndNumbers[i], rndNumbers2[i]))
-                rndVecCorr = rndVec * numpy.transpose(numpy.linalg.cholesky(corrMatrix))
-                rndCorr = rndNumbers[i] * corr + numpy.sqrt(1-corr**2) * rndNumbers2[i]
-
-                x_next = x_last * numpy.exp(-self.meanSpeed * dt) + yIntegral[i] + vol * rndVecCorr[0,0]
+                rndCorr = rndMatrix1[j,i] * corr + numpy.sqrt(1-corr**2) * rndMatrix2[j,i]
                 
-                I_next = I_last - x_last * self.G(i*dt, (i+1)*dt) - (IVariance[i] + y[i] * self.G(i*dt,(i+1)*dt))/2 + IVol * rndVecCorr[0,1]
-
+                x_next = x_last * numpy.exp(-self.meanSpeed * dt) + yIntegral[i] + vol * rndMatrix1[j,i]
+                
+                I_next = I_last - x_last * self.G(i*dt, (i+1)*dt) - (IVariance[i] + y[i] * self.G(i*dt,(i+1)*dt))/2 + IVol * rndCorr
                 x_last = x_next 
+                
                 I_last = I_next
 
             answer +=  numpy.exp(I_next) * max(self.bondPrice(x_next, evoTime, evoTime+0.25) - 1 / (1 + 0.25 * strike), 0)
@@ -346,5 +342,5 @@ model = hullWhite(0.02, 0.003, curveJ)
 endDate = 3
 print "Analytic    =  ", model.optionPricer(endDate, 0.020919083, "Cap") * 10000
 #print "Analytic    =  ", model.bondPrice(0,0,5.25) * 10000
-print "Euler MC    =  ", model.eulerPath(endDate, 0.020919083, 10000, 50)
-print "Monte Carlo =  ", model.exactPath(endDate, 0.020919083, 10000, 1)
+print "Euler MC    =  ", model.eulerPath(endDate, 0.020919083, 1000, 50)
+print "Monte Carlo =  ", model.exactPath(endDate, 0.020919083, 100000, 1)
