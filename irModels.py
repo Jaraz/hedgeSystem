@@ -240,7 +240,7 @@ class hullWhite:
     
         return -sigma**2 / (2*a*a)*(term1+term2)
         
-    def optionPricer(self, expiry, strike, optType):
+    def capFloorPricer(self, expiry, strike, optType):
         #convert strike from bps to DF
         adjStrike = 1 / (1 + 0.25 * strike)
         
@@ -294,41 +294,44 @@ class hullWhite:
     #risk neutral numeraire
     def exactPath(self, evoTime, strike, paths, steps):
         dt = evoTime / steps
-        vol =  numpy.sqrt(self.sigma**2 / (2 * self.meanSpeed) * (1 - numpy.exp(-2 * self.meanSpeed * dt)))
-        IVariance = numpy.zeros(steps+1)
-        y = numpy.zeros(steps+1)
-        yIntegral = numpy.zeros(steps+2)      
-        covariance = numpy.zeros(steps+1)
+        IVariance = numpy.zeros(steps)
+        IVol = numpy.zeros(steps)
+        y = numpy.zeros(steps)
+        yIntegral = numpy.zeros(steps)      
+        covariance = numpy.zeros(steps)
+        corr = numpy.zeros(steps)
+        gVec = numpy.zeros(steps)
         rndMatrix1 = self.rnd.genNormalMatrix(paths*steps, paths, steps)
         rndMatrix2 = self.rnd.genNormalMatrix(paths*steps, paths, steps)
         answer = 0
         
+        expMeanSpeed = numpy.exp(-self.meanSpeed * dt)
+        vol =  numpy.sqrt(self.sigma**2 / (2 * self.meanSpeed) * (1 - numpy.exp(-2 * self.meanSpeed * dt)))
+        
         #precompute step
-        for i in xrange(steps+1):
+        for i in xrange(steps):
             t = (i+1) * dt            
             s = (i) * dt
             y[i] = self.y(s)
             yIntegral[i] = self.sigma**2/(2*self.meanSpeed**2) * ((1 - numpy.exp(-self.meanSpeed*dt)) + (numpy.exp(-2*self.meanSpeed*t) - numpy.exp(-self.meanSpeed*t - self.meanSpeed*s)))
 
             IVariance[i]  = self.IVar(s, t)
+            IVol[i] = numpy.sqrt(IVariance[i])
             covariance[i] = self.cov(s, t, self.sigma, self.meanSpeed)
-
+            corr[i] = covariance[i] / (vol * IVol[i])
+            gVec[i] = self.G(s, t)
 
         for j in xrange(paths):
             x_last = 0
             I_last = 0
             
             for i in xrange(steps):
-                IVol = numpy.sqrt(IVariance[i])
-                corr = covariance[i] / (vol * IVol)
+                rndCorr = rndMatrix1[j,i] * corr[i] + numpy.sqrt(1-corr[i]**2) * rndMatrix2[j,i]
+                
+                x_next = x_last * expMeanSpeed + yIntegral[i] + vol * rndMatrix1[j,i]
+                I_next = I_last - x_last * gVec[i] - (IVariance[i] + y[i] * gVec[i])/2 + IVol[i] * rndCorr
 
-                rndCorr = rndMatrix1[j,i] * corr + numpy.sqrt(1-corr**2) * rndMatrix2[j,i]
-                
-                x_next = x_last * numpy.exp(-self.meanSpeed * dt) + yIntegral[i] + vol * rndMatrix1[j,i]
-                
-                I_next = I_last - x_last * self.G(i*dt, (i+1)*dt) - (IVariance[i] + y[i] * self.G(i*dt,(i+1)*dt))/2 + IVol * rndCorr
                 x_last = x_next 
-                
                 I_last = I_next
 
             answer +=  numpy.exp(I_next) * max(self.bondPrice(x_next, evoTime, evoTime+0.25) - 1 / (1 + 0.25 * strike), 0)
@@ -340,7 +343,7 @@ model = hullWhite(0.02, 0.003, curveJ)
 #spot curve
 #model.plotTCurve(0, 0, 30)
 endDate = 3
-print "Analytic    =  ", model.optionPricer(endDate, 0.020919083, "Cap") * 10000
+print "Analytic    =  ", model.capFloorPricer(endDate, 0.020919083, "Cap") * 10000
 #print "Analytic    =  ", model.bondPrice(0,0,5.25) * 10000
 print "Euler MC    =  ", model.eulerPath(endDate, 0.020919083, 1000, 50)
-print "Monte Carlo =  ", model.exactPath(endDate, 0.020919083, 100000, 1)
+print "Monte Carlo =  ", model.exactPath(endDate, 0.020919083, 25000, 1)
