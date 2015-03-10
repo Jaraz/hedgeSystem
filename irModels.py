@@ -300,14 +300,15 @@ class hullWhite:
         yIntegral = numpy.zeros(steps)      
         covariance = numpy.zeros(steps)
         corr = numpy.zeros(steps)
+        rndCorr = numpy.zeros(steps)
         gVec = numpy.zeros(steps)
         rndMatrix1 = self.rnd.genNormalMatrix(paths*steps, paths, steps)
         rndMatrix2 = self.rnd.genNormalMatrix(paths*steps, paths, steps)
         answer = 0
-        
+
         expMeanSpeed = numpy.exp(-self.meanSpeed * dt)
         vol =  numpy.sqrt(self.sigma**2 / (2 * self.meanSpeed) * (1 - numpy.exp(-2 * self.meanSpeed * dt)))
-        
+
         #precompute step
         for i in xrange(steps):
             t = (i+1) * dt            
@@ -321,22 +322,33 @@ class hullWhite:
             corr[i] = covariance[i] / (vol * IVol[i])
             gVec[i] = self.G(s, t)
 
+        rndCorr = rndMatrix1 * corr + rndMatrix2 * numpy.sqrt(1-corr**2)
+
+        xAnswer = numpy.zeros(steps)        
+        iAnswer = numpy.zeros(steps)        
+        xAnswer = yIntegral + vol * rndMatrix1[:,0]
+        iAnswer = -(IVariance + y * gVec) / 2 + IVol*rndCorr[:,0]
+        
+        answer = numpy.exp(iAnswer) * numpy.maximum(self.bondPrice(xAnswer, evoTime, evoTime+0.25) - 1 / (1 + 0.25 * strike), 0)
+        
+        
         for j in xrange(paths):
             x_last = 0
             I_last = 0
             
-            for i in xrange(steps):
-                rndCorr = rndMatrix1[j,i] * corr[i] + numpy.sqrt(1-corr[i]**2) * rndMatrix2[j,i]
+#            for i in xrange(steps):
+                #rndCorr = rndMatrix1[j,i] * corr[i] + numpy.sqrt(1-corr[i]**2) * rndMatrix2[j,i]
                 
-                x_next = x_last * expMeanSpeed + yIntegral[i] + vol * rndMatrix1[j,i]
-                I_next = I_last - x_last * gVec[i] - (IVariance[i] + y[i] * gVec[i])/2 + IVol[i] * rndCorr
+#                x_next = x_last * expMeanSpeed + yIntegral[i] + vol * rndMatrix1[j,i]
+#                I_next = I_last - x_last * gVec[i] - (IVariance[i] + y[i] * gVec[i])/2 + IVol[i] * rndCorr[j,i]
 
-                x_last = x_next 
-                I_last = I_next
+#                x_last = x_next 
+#                I_last = I_next
 
-            answer +=  numpy.exp(I_next) * max(self.bondPrice(x_next, evoTime, evoTime+0.25) - 1 / (1 + 0.25 * strike), 0)
+#            answer +=  numpy.exp(I_next) * max(self.bondPrice(x_next, evoTime, evoTime+0.25) - 1 / (1 + 0.25 * strike), 0)
         
-        return self.curve.discFact(evoTime) * answer / paths * 10000
+#        return self.curve.discFact(evoTime) * answer / paths * 10000
+        return self.curve.discFact(evoTime) * answer.mean() * 10000
 
 model = hullWhite(0.02, 0.003, curveJ)
 
@@ -346,4 +358,4 @@ endDate = 3
 print "Analytic    =  ", model.capFloorPricer(endDate, 0.020919083, "Cap") * 10000
 #print "Analytic    =  ", model.bondPrice(0,0,5.25) * 10000
 print "Euler MC    =  ", model.eulerPath(endDate, 0.020919083, 1000, 50)
-print "Monte Carlo =  ", model.exactPath(endDate, 0.020919083, 25000, 1)
+print "Monte Carlo =  ", model.exactPath(endDate, 0.020919083, 100000, 1)
