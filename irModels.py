@@ -260,12 +260,32 @@ class hullWhite:
             return adjStrike * pt * Random.normCDF(-d2) - ptMat * Random.normCDF(-d1)
         
         return 999
+
+    def swapPricer(self, x, start, tenor, strike, payRec):
+        #gen dates
+        fix = 0
+        flt = 0
         
+        for i in xrange(1,tenor*2+1):
+            temp = start + 0.5 * i
+            fix += 0.5 * self.bondPrice(x, start, temp) * strike
+                    
+        flt += 1 - self.bondPrice(x, start, start+tenor)
+        
+        if payRec == "Pay":
+            return fix - flt
+        else:
+            return flt - fix
         
     def eulerPath(self, evoTime, strike, paths, steps):
         dt = evoTime / steps
         vol = self.sigma * numpy.sqrt(dt)
         y = numpy.zeros(steps+1)        
+        rndMatrix = self.rnd.genNormalMatrix(paths*steps, paths, steps)
+        xAnswer = numpy.zeros(paths)        
+        xLast   = numpy.zeros(paths)
+        iAnswer = numpy.zeros(paths)
+        iLast   = numpy.zeros(paths)        
 
         answer = 0
 
@@ -274,22 +294,18 @@ class hullWhite:
             t = (i)*dt
             y[i] = self.sigma**2 / (2 * self.meanSpeed) * (1 - numpy.exp(-2 * self.meanSpeed * t))
 
-        for j in xrange(paths):
-            rndNumbers = self.rnd.genNormal(steps)
-            x_last = 0                
-            I_last = 0
-                
-            for i in xrange(steps):
-                #x_next = x_last + y[i+1] - y[i] - self.meanSpeed * x_last * dt + vol * rndNumbers[i]            
-                x_next = numpy.exp(-self.meanSpeed*dt) * x_last + (1 - numpy.exp(-self.meanSpeed*dt))/self.meanSpeed * y[i] + vol * rndNumbers[i]            
-                I_next = I_last - x_next * dt
+        for i in xrange(steps):
+            xAnswer = numpy.exp(-self.meanSpeed*dt) * xLast + (1 - numpy.exp(-self.meanSpeed*dt))/self.meanSpeed * y[i] + vol * rndMatrix[:,i]            
+            iAnswer = iLast - xAnswer * dt
 
-                x_last = x_next
-                I_last = I_next
-            
-            answer += numpy.exp(I_next) * max(self.bondPrice(x_next, evoTime, evoTime+0.25) - 1 / (1 + 0.25 * strike), 0)
-        
-        return self.curve.discFact(evoTime) * answer / paths * 10000
+            xLast   = xAnswer
+            iLast   = iAnswer
+
+        #answer = numpy.exp(iAnswer) * numpy.maximum(self.bondPrice(xAnswer, evoTime, evoTime+0.25) - 1 / (1 + 0.25 * strike), 0)
+        answer = numpy.exp(iAnswer) * self.swapPricer(xAnswer, 10, 10, strike, "Pay")
+        answer = numpy.exp(iAnswer) * self.bondPrice(xAnswer, 10,10.25)
+         
+        return self.curve.discFact(evoTime) * answer.mean() * 10000
 
     #risk neutral numeraire
     def exactPath(self, evoTime, strike, paths, steps):
@@ -324,38 +340,30 @@ class hullWhite:
 
         rndCorr = rndMatrix1 * corr + rndMatrix2 * numpy.sqrt(1-corr**2)
 
-        xAnswer = numpy.zeros(steps)        
-        iAnswer = numpy.zeros(steps)        
-        xAnswer = yIntegral + vol * rndMatrix1[:,0]
-        iAnswer = -(IVariance + y * gVec) / 2 + IVol*rndCorr[:,0]
-        
-        answer = numpy.exp(iAnswer) * numpy.maximum(self.bondPrice(xAnswer, evoTime, evoTime+0.25) - 1 / (1 + 0.25 * strike), 0)
-        
-        
-        for j in xrange(paths):
-            x_last = 0
-            I_last = 0
+        xAnswer = numpy.zeros(paths)        
+        xLast   = numpy.zeros(paths)
+        iAnswer = numpy.zeros(paths)
+        iLast   = numpy.zeros(paths)        
+
+        for i in xrange(steps):
+            xAnswer = xLast * expMeanSpeed + yIntegral[i] + vol * rndMatrix1[:,i]
+            iAnswer = iLast - xLast * gVec[i] -(IVariance[i] + y[i] * gVec[i]) / 2 + IVol[i]*rndCorr[:,i]
             
-#            for i in xrange(steps):
-                #rndCorr = rndMatrix1[j,i] * corr[i] + numpy.sqrt(1-corr[i]**2) * rndMatrix2[j,i]
-                
-#                x_next = x_last * expMeanSpeed + yIntegral[i] + vol * rndMatrix1[j,i]
-#                I_next = I_last - x_last * gVec[i] - (IVariance[i] + y[i] * gVec[i])/2 + IVol[i] * rndCorr[j,i]
-
-#                x_last = x_next 
-#                I_last = I_next
-
-#            answer +=  numpy.exp(I_next) * max(self.bondPrice(x_next, evoTime, evoTime+0.25) - 1 / (1 + 0.25 * strike), 0)
+            xLast = xAnswer
+            iLast = iAnswer
         
-#        return self.curve.discFact(evoTime) * answer / paths * 10000
+        #answer = numpy.exp(iAnswer) * numpy.maximum(self.bondPrice(xAnswer, evoTime, evoTime+0.25) - 1 / (1 + 0.25 * strike), 0)
+        answer = numpy.exp(iAnswer) * self.swapPricer(xAnswer, 10, 10, strike, "Pay")
+        #answer = numpy.exp(iAnswer) * self.bondPrice(xAnswer, 10,20)
+            
         return self.curve.discFact(evoTime) * answer.mean() * 10000
 
 model = hullWhite(0.02, 0.003, curveJ)
 
 #spot curve
 #model.plotTCurve(0, 0, 30)
-endDate = 3
-print "Analytic    =  ", model.capFloorPricer(endDate, 0.020919083, "Cap") * 10000
-#print "Analytic    =  ", model.bondPrice(0,0,5.25) * 10000
-print "Euler MC    =  ", model.eulerPath(endDate, 0.020919083, 1000, 50)
-print "Monte Carlo =  ", model.exactPath(endDate, 0.020919083, 100000, 1)
+endDate = 10
+print "Analytic    =  ", yieldCurve.swapPricer(10,10,0.023096, curveJan) * 10000 #model.capFloorPricer(endDate, 0.020919083, "Cap") * 10000
+#print "Analytic    =  ", model.bondPrice(0,0,20) * 10000
+print "Euler MC    =  ", model.eulerPath(endDate, 0.023096, 10000, 100)
+print "Monte Carlo =  ", model.exactPath(endDate, 0.023096, 10000, 1)

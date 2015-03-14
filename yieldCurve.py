@@ -63,10 +63,10 @@ def swapPricer(start, tenor, strike, curve):
     flt = 0
     fix = 0
     
-    for i in xrange(fix_per):    
+    for i in xrange(1, fix_per+1):    
         fix = fix + 0.5 * curveInterp(start + i * 0.5, curve) * strike
     
-    for j in xrange(flt_per):
+    for j in xrange(1, flt_per+1):
         flt = flt + 0.25 * curveInterp(start + j * 0.25, curve) * fwdRate(start + j * 0.25, curve)
     
     return fix - flt
@@ -141,10 +141,10 @@ def swapRate(start, tenor, curve):
     flt = 0
     fix = 0
     
-    for i in xrange(fix_per):    
+    for i in xrange(1, fix_per+1):    
         fix = fix + 0.5 * curveInterp(start + i * 0.5, curve)
     
-    for j in xrange(flt_per):
+    for j in xrange(1, flt_per+1):
         flt = flt + 0.25 * curveInterp(start + j * 0.25, curve) * fwdRate(start + j * 0.25, curve)
     
     return flt / fix * 10000
