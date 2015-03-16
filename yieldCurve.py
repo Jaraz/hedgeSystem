@@ -5,6 +5,7 @@ Created on Sun Feb 15 15:35:26 2015
 @author: jaycw_000
 """
 
+from __future__ import division
 from fredapi import Fred
 import numpy
 import scipy
@@ -174,6 +175,47 @@ def plotZero(start, tenor, curve):
     
     plot(dates, zeros)
     return
+
+#compounding = 1 - annual, 2 - semi
+def bondPrice(maturity, coupon, compounding, YTM):
+    price = 0
+    for i in xrange(1, maturity * compounding+1):
+        price += (coupon/compounding) / (1 + YTM / compounding)**i * 100
+
+    price += 100 / (1 + YTM / compounding)**(maturity * compounding)
+    
+    return price
+
+def plotBond(maturity, coupon, compounding):
+    ytmVec = numpy.array(range(0,10))/100
+
+    answer = bondPrice(maturity, coupon, compounding, ytmVec)
+    plot(ytmVec, answer)
+    
+    
+def ytm(maturity, coupon, compounding, price):
+    func = lambda x: bondPrice(maturity, coupon, compounding, x) - price
+    answer = scipy.optimize.brentq(func, a = 0.0000001, b = 10)
+    return answer    
+
+def duration(maturity, coupon, compounding, YTM):
+    price = bondPrice(maturity, coupon, compounding, YTM)
+    numer = 0
+    for i in xrange(1, maturity * compounding+1):
+        numer += (i * coupon/compounding) / (1 + YTM / compounding)**i * 100
+    numer += (maturity * 100) / (1 + YTM / compounding)**(maturity)
+
+    return numer / price
+
+def modDuration(maturity, coupon, compounding, YTM):
+    return duration(maturity, coupon, compounding, YTM) / (1 + YTM/compounding)
+
+def bond(maturity, coupon, compounding, YTM):
+    print "Price    = ", bondPrice(maturity, coupon, compounding, YTM)
+    print "Duration = ", duration(maturity, coupon, compounding, YTM)
+    print "ModDur   = ", modDuration(maturity, coupon, compounding, YTM)
+    print "bpv      = ", -modDuration(maturity, coupon, compounding, YTM) * 0.0001 * bondPrice(maturity, coupon, compounding, YTM)
+    print "act bpv  = ", bondPrice(maturity, coupon, compounding, YTM+0.0001) - bondPrice(maturity, coupon, compounding, YTM)
 
 #curveJan = curveBuild('2015-01-30')
 #curveJ = yieldCurve('2015-01-30')
