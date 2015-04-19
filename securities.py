@@ -5,6 +5,8 @@ Created on Wed Jan 21 09:47:36 2015
 @author: jaycw_000
 """
 
+import numpy
+
 #Option Classes
 class option:
     desc = ""    
@@ -33,7 +35,7 @@ class call(option):
     desc = "call"
     
     def payoff(self, S):
-        return self.units * max(S - self.strike, 0)
+        return self.units * numpy.maximum(S - self.strike, 0)
 
 class put(option):
     desc = "put"

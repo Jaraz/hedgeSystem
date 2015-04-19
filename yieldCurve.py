@@ -202,8 +202,8 @@ def duration(maturity, coupon, compounding, YTM):
     price = bondPrice(maturity, coupon, compounding, YTM)
     numer = 0
     for i in xrange(1, maturity * compounding+1):
-        numer += (i * coupon/compounding) / (1 + YTM / compounding)**i * 100
-    numer += (maturity * 100) / (1 + YTM / compounding)**(maturity)
+        numer += (i/compounding * coupon/compounding) / (1 + YTM / compounding)**i * 100
+    numer += (maturity * 100) / (1 + YTM / compounding)**(maturity*compounding)
 
     return numer / price
 
