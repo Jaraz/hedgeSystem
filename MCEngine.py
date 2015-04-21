@@ -12,6 +12,7 @@ import Random
 from scipy.stats import norm
 from scipy import integrate
 from matplotlib.pyplot import *
+from securities import *
 
 class bsEngine:
     def __init__(self, antiFlag, momentFlag):
@@ -55,12 +56,12 @@ class bsIntegralEngine:
     def bsPrice(self, S, r, vol, optionType):
         T = optionType.returnExpiry()
         
-        def integrand(x, S, expiry, vol, optionType):
-            d = (numpy.log(x/S) + 0.5 * vol**2 * expiry) / (vol * numpy.sqrt(expiry))
-            #return norm.pdf(d) / (vol * numpy.sqrt(expiry) * x)
+        def integrand(x, S, expiry, vol, optionType, r):
+            d = (numpy.log(x/S) + r * expiry + 0.5 * vol**2 * expiry) / (vol * numpy.sqrt(expiry))
+            
             return optionType.payoff(x) / (vol * numpy.sqrt(expiry) * x) * norm.pdf(d)
         
-        return(integrate.quad(integrand, a = 100, b = 300, args = (S, T, vol, optionType)))
+        return(numpy.exp(-r * T) * integrate.quad(integrand, a = 0, b = 400, args = (S, T, vol, optionType, r), limit = 200)[0])
 
 class eulerEngine:
     def __init__(self, antiFlag, momentFlag):
@@ -95,12 +96,16 @@ class eulerEngine:
         
         
 ## Main test Bach Model ##
+#callOption = call(100, 1, 1)
 callOption = call(100, 1, 1)
 normEngine = bachEngine(True, False)
+blackEngien= bsEngine(True, False)
 port = portfolio([callOption])
 bsInt = bsIntegralEngine()
+resultStats = MCstats()
 
-print "Analytic Call Norm Price = ", bachPrice(1, 100, "call", 100, 0, 10)
-print "MC Simulation Norm Call Price = ", normEngine.bachEvo(100, 0, 10, callOption, 1000000)
-print "Analytic Call BS Price = ", calcPrice(100, 0, 0.1, port)
-print "Integral Call BS Price = ", bsInt.bsPrice(100, 0, 0.1, callOption)[0]
+print "Analytic Call Norm Price      = ", bachPrice(1, 100, "call", 100, 0, 500)
+print "MC Simulation Norm Call Price = ", normEngine.bachEvo(100, 0, 500, callOption, 1000000)
+print "MC Sim BS Price               = ", blackEngien.bsEvo(100, 0.01, .1, callOption, 100000, resultStats)
+print "Analytic Call BS Price        = ", calcPrice(100, 0.01, .1, port)
+print "Integral Call BS Price        = ", bsInt.bsPrice(100, 0.01, .1, callOption)

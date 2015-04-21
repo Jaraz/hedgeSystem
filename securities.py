@@ -11,10 +11,11 @@ import numpy
 class option:
     desc = ""    
     
-    def __init__(self, K, T, x):
+    def __init__(self, K, T, x, european = True):
         self.expiry = T
         self.strike = K
         self.units = x
+        self.european = european
     
     def updateExpiry(self,x):
         self.expiry = x
@@ -30,6 +31,9 @@ class option:
     
     def returnUnits(self):
         return self.units
+        
+    def returnEuropean(self):
+        return self.european
 
 class call(option): 
     desc = "call"
@@ -41,25 +45,29 @@ class put(option):
     desc = "put"
     
     def payoff(self, S):
-        return self.units * max(self.strike - S, 0)
+        return self.units * numpy.maximum(self.strike - S, 0)
 
 class callDigital(option):
     desc = "digCall"
     
     def payoff(self, S):
-        if S > self.strike:
-            return self.units * 1
-        else:
-            return self.units * 0
+        answer = numpy.choose(S>self.strike, [0,1])
+        return self.units * answer
+        #if S > self.strike:
+        #    return self.units * 1
+        #else:
+        #    return self.units * 0
 
 class putDigital(option):
     desc = "digPut"
     
     def payoff(self, S):
-        if S < self.strike:
-            return self.units * 1
-        else:
-            return self.units * 0
+        answer = numpy.choose(S<self.strike, [0,1])
+        return self.units * answer
+        #if S < self.strike:
+        #    return self.units * 1
+        #else:
+        #    return self.units * 0
 
 class forward(option):
     desc = "fwd"
