@@ -51,6 +51,31 @@ class bachEngine:
         answer = S * numpy.exp(r * T) + vol * math.sqrt(T) * rndNumbers
         
         return optionType.payoff(answer).mean()
+        
+    def bachNorm(self, S, r, vol, optionType, sims):
+        rndNumbers = self.rnd.genNormal(sims)
+        answer = numpy.zeros(sims)
+        T = optionType.returnExpiry()
+        
+        answer = S * numpy.exp(r * T) + vol * numpy.sqrt((numpy.exp(2 * r * T) - 1)/(2*r)) * rndNumbers
+        
+        return optionType.payoff(answer).mean()
+    
+    def eulerStep(self, S, r, vol, optionType, steps, sims):
+        rndNumbers = self.rnd.genNormalMatrix(steps * sims, sims, steps)
+        rndNumbers = numpy.transpose(rndNumbers)
+        answer = numpy.zeros(sims)
+        answer[:] = S
+        T = optionType.returnExpiry()
+        dt = T / steps
+        rdt = r * dt        
+        rndVolDT = vol * numpy.sqrt(dt) * rndNumbers
+                
+        for i in xrange(steps):
+            answer = answer + answer * rdt + rndVolDT[i]
+        
+        return optionType.payoff(answer).mean()
+        
 
 class bsIntegralEngine:
     def bsPrice(self, S, r, vol, optionType):
@@ -104,8 +129,10 @@ port = portfolio([callOption])
 bsInt = bsIntegralEngine()
 resultStats = MCstats()
 
-print "Analytic Call Norm Price      = ", bachPrice(1, 100, "call", 100, 0, 500)
-print "MC Simulation Norm Call Price = ", normEngine.bachEvo(100, 0, 500, callOption, 1000000)
-print "MC Sim BS Price               = ", blackEngien.bsEvo(100, 0.01, .1, callOption, 100000, resultStats)
-print "Analytic Call BS Price        = ", calcPrice(100, 0.01, .1, port)
-print "Integral Call BS Price        = ", bsInt.bsPrice(100, 0.01, .1, callOption)
+print "Analytic Call Norm Price      = ", bachPrice(1, 100, "call", 100, 0.1, 10)
+print "MC Simulation Norm Call Price = ", normEngine.bachEvo(100, 0.1, 10, callOption, 1000000)
+#print "MC 2                          = ", normEngine.bachNorm(100, 0.00000001, 10, callOption, 1000000)
+print "MC Euleter Step Norm Call     = ", normEngine.eulerStep(100, 0.1, 10, callOption, 200, 1000000)
+#print "MC Sim BS Price               = ", blackEngien.bsEvo(100, 0, .1, callOption, 100000, resultStats)
+print "Analytic Call BS Price        = ", calcPrice(100, 0.1, .1, port)
+#print "Integral Call BS Price        = ", bsInt.bsPrice(100, 0.01, .1, callOption)

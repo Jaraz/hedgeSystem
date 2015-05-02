@@ -170,7 +170,7 @@ def bachPrice(T, K, callPut, S, r, vol):
     d = (S * math.exp(r * T) - K) / (vol * math.sqrt(T))
     
     if callPut == "call":
-        answer = (S * math.exp(r * T) - K) * Random.normCDF(d) + vol * math.sqrt(T) * 1 / math.sqrt(2 * math.pi) * math.exp(-d**2/2)
+        answer = (S- K*numpy.exp(-r*T)) * Random.normCDF(d) + vol * math.sqrt(T) * 1 / math.sqrt(2 * math.pi) * numpy.exp(-r*T)*math.exp(-d**2/2)
     if callPut == "put":
         answer = 0
     

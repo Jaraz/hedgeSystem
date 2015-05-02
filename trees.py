@@ -14,21 +14,37 @@ class treeType:
 
 class logTree(treeType):
     def returnUp(self, S, r, vol, dt):
-        up = (r - 0.5 * vol**2) * dt + vol * numpy.sqrt(dt)
+        up = numpy.zeros(numpy.size(S))
+        up = up + (r - 0.5 * vol**2) * dt + vol * numpy.sqrt(dt)
         return up
     
     def returnDown(self, S, r, vol, dt):
-        down = (r - 0.5 * vol**2) * dt - vol * numpy.sqrt(dt)
+        down = numpy.zeros(numpy.size(S))
+        down = down + (r - 0.5 * vol**2) * dt - vol * numpy.sqrt(dt)
         return down
+    
+    def returnStart(self, S):
+        return numpy.log(S)
+    
+    def returnPayoff(self, S):
+        return numpy.exp(S)
 
 class normalTree(treeType):
     def returnUp(self, S, r, vol, dt):
-        up = r * dt + numpy.log(vol * numpy.sqrt(dt))
+        up = numpy.zeros(numpy.size(S))
+        up = up + S * (numpy.exp(r * dt) -1) + vol * numpy.sqrt(dt)
         return up
 
     def returnDown(self, S, r, vol, dt):
-        up = r * dt - numpy.log(vol * numpy.sqrt(dt))
-        return up        
+        down = numpy.zeros(numpy.size(S))
+        down = down + S * (numpy.exp(r * dt)-1) - vol * numpy.sqrt(dt)
+        return down
+        
+    def returnStart(self, S):
+        return S
+    
+    def returnPayoff(self, S):
+        return S
 
 class tree:
     def __init__(self, treeModel):
@@ -43,11 +59,11 @@ class tree:
         for i in xrange(1,steps):
             tree.append(numpy.zeros(i+1))        
 
-        tree[0][0] = numpy.log(S)
-        up = self.treeModel.returnUp(S, r, vol, dt)
-        down = self.treeModel.returnDown(S, r, vol, dt)
-                
+        tree[0][0] = self.treeModel.returnStart(S)
+        
         for i in xrange(1,steps):
+            up = self.treeModel.returnUp(tree[i-1], r, vol, dt)
+            down = self.treeModel.returnDown(tree[i-1][0], r, vol, dt)
             tree[i][1:] = tree[i-1] + up
             tree[i][0] = tree[i-1][0] + down
         
@@ -65,7 +81,7 @@ class tree:
             answer.append(numpy.zeros(i+1))
 
         #Price option - last step first
-        answer[steps-1] = optionType.payoff(numpy.exp(tree[steps-1]))
+        answer[steps-1] = optionType.payoff(self.treeModel.returnPayoff(tree[steps-1]))
         
         for i in xrange(steps - 2, -1, -1):
             answer[i] = disc * 0.5 *(answer[i+1][1:] + answer[i+1][:-1])
@@ -74,11 +90,13 @@ class tree:
 
         return tree, answer
 
+
+
 logType = logTree()
 normType = normalTree()
 testTree = tree(logType)
 testTree2 = tree(normType)
-putOption = put(100, 1, 1, False)
-temp, tempA = testTree.priceTree(100, 0.05, 0.1, putOption, 200)
-temp2, tempA2 = testTree2.priceTree(100, 0.05, 0.1, putOption, 200)
+putOption = call(100, 1, 1, True)
+temp, tempA = testTree.priceTree(100, 0.01, 0.1, putOption, 1000)
+temp2, tempA2 = testTree2.priceTree(100, 0.01, 10, putOption, 1000)
 print tempA[0][0], tempA2[0][0]
