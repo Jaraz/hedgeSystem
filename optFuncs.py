@@ -8,6 +8,7 @@ Created on Wed Jan 21 09:35:47 2015
 from __future__ import division
 import math
 import Random
+import numpy
 
 def forwardVal(T, K, S, r):
     return(S - K*math.exp(-r*T))
@@ -168,9 +169,10 @@ def optionTheta(T, K, callPut, S, r, vol):
     
 def bachPrice(T, K, callPut, S, r, vol):
     d = (S * math.exp(r * T) - K) / (vol * math.sqrt(T))
+    vol = vol * numpy.sqrt((numpy.exp(2 * r * T) - 1) / (2 * r * T))        
     
     if callPut == "call":
-        answer = (S- K*numpy.exp(-r*T)) * Random.normCDF(d) + vol * math.sqrt(T) * 1 / math.sqrt(2 * math.pi) * numpy.exp(-r*T)*math.exp(-d**2/2)
+        answer = (S- K*numpy.exp(-r*T)) * Random.normCDF(d) + vol * numpy.sqrt(T) * 1 / numpy.sqrt(2 * math.pi) * numpy.exp(-r*T)*numpy.exp(-d**2/2)
     if callPut == "put":
         answer = 0
     

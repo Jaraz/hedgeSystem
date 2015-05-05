@@ -32,12 +32,12 @@ class logTree(treeType):
 class normalTree(treeType):
     def returnUp(self, S, r, vol, dt):
         up = numpy.zeros(numpy.size(S))
-        up = up + S * (numpy.exp(r * dt) -1) + vol * numpy.sqrt(dt)
+        up = up + S * (numpy.exp(r * dt) -1) + vol * numpy.sqrt((numpy.exp(2 * r * dt) - 1)/(2*r))
         return up
 
     def returnDown(self, S, r, vol, dt):
         down = numpy.zeros(numpy.size(S))
-        down = down + S * (numpy.exp(r * dt)-1) - vol * numpy.sqrt(dt)
+        down = down + S * (numpy.exp(r * dt)-1) - vol * numpy.sqrt((numpy.exp(2 * r * dt) - 1)/(2*r))
         return down
         
     def returnStart(self, S):
