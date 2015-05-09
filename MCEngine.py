@@ -124,5 +124,5 @@ resultStats = MCstats()
 
 print "Analytic Call Norm Price      = ", bachPrice(1, 100, "call", 100, .1, 10)
 print "MC 2                          = ", normEngine.bachNorm(100, .1, 10, callOption, 1000000)
-print "MC Euler Step Norm Call       = ", normEngine.eulerStep(100, 1, 10, callOption, 200, 100000)
+print "MC Euler Step Norm Call       = ", normEngine.eulerStep(100, .1, 10, callOption, 200, 100000)
 print "Analytic Call BS Price        = ", calcPrice(100, 0.1, .1, port)
