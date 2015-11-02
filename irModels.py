@@ -261,7 +261,7 @@ class hullWhite:
         
         return 999
 
-    def swapPricer(self, x, start, tenor, strike, payRec):
+    def swapPricer(self, x, start, tenor, strike, payRec, debug = False):
         #gen dates
         fix = 0
         flt = 0
@@ -269,6 +269,9 @@ class hullWhite:
         for i in xrange(1,tenor*2+1):
             temp = start + 0.5 * i
             fix += 0.5 * self.bondPrice(x, start, temp) * strike
+            if debug == True:
+                print temp, fix
+                
                     
         flt += 1 - self.bondPrice(x, start, start+tenor)
         
@@ -302,8 +305,8 @@ class hullWhite:
             iLast   = iAnswer
 
         #answer = numpy.exp(iAnswer) * numpy.maximum(self.bondPrice(xAnswer, evoTime, evoTime+0.25) - 1 / (1 + 0.25 * strike), 0)
-        answer = numpy.exp(iAnswer) * self.swapPricer(xAnswer, 10, 10, strike, "Pay")
-        answer = numpy.exp(iAnswer) * self.bondPrice(xAnswer, 10,10.25)
+        #answer = numpy.exp(iAnswer) * self.swapPricer(xAnswer, 10, 10, strike, "Pay")
+        answer = numpy.exp(iAnswer) * self.bondPrice(xAnswer, 10,20)
          
         return self.curve.discFact(evoTime) * answer.mean() * 10000
 
@@ -325,7 +328,7 @@ class hullWhite:
         expMeanSpeed = numpy.exp(-self.meanSpeed * dt)
         vol =  numpy.sqrt(self.sigma**2 / (2 * self.meanSpeed) * (1 - numpy.exp(-2 * self.meanSpeed * dt)))
 
-        #precompute step
+        #precompute steps
         for i in xrange(steps):
             t = (i+1) * dt            
             s = (i) * dt
@@ -351,11 +354,11 @@ class hullWhite:
             
             xLast = xAnswer
             iLast = iAnswer
-        
+        answer = numpy.exp(iAnswer)
         #answer = numpy.exp(iAnswer) * numpy.maximum(self.bondPrice(xAnswer, evoTime, evoTime+0.25) - 1 / (1 + 0.25 * strike), 0)
-        answer = numpy.exp(iAnswer) * self.swapPricer(xAnswer, 10, 10, strike, "Pay")
-        #answer = numpy.exp(iAnswer) * self.bondPrice(xAnswer, 10,20)
-            
+        #answer = numpy.exp(iAnswer) * self.swapPricer(xAnswer, 10, 10, strike, "Pay")
+        #answer = numpy.exp(iAnswer) * self.bondPrice(xAnswer, 10,10.25)
+        return answer.mean()
         return self.curve.discFact(evoTime) * answer.mean() * 10000
 
 model = hullWhite(0.02, 0.003, curveJ)
@@ -363,7 +366,9 @@ model = hullWhite(0.02, 0.003, curveJ)
 #spot curve
 #model.plotTCurve(0, 0, 30)
 endDate = 10
-print "Analytic    =  ", yieldCurve.swapPricer(10,10,0.023096, curveJan) * 10000 #model.capFloorPricer(endDate, 0.020919083, "Cap") * 10000
-#print "Analytic    =  ", model.bondPrice(0,0,20) * 10000
-print "Euler MC    =  ", model.eulerPath(endDate, 0.023096, 10000, 100)
+print "Analytic    =  ", yieldCurve.swapPricer(10,10,0.023096, curveJan) * 10000
+print 'Anal test   =  ', model.swapPricer(0, 10, 10, 0.023096, "Pay", True) * 10000
+#print "Analytic    =  ", model.capFloorPricer(endDate, 0.020919083, "Cap") * 10000
+#print "Analytic    =  ", model.bondPrice(0,0,10.25) * 10000
+#print "Euler MC    =  ", model.eulerPath(endDate, 0.023096, 10000, 100)
 print "Monte Carlo =  ", model.exactPath(endDate, 0.023096, 10000, 1)

@@ -64,3 +64,6 @@ def normCDF(x):
         return 1 - normCDF(-x)
     if x == 0:
         return 0.5
+
+#vecCDF = np.vectorize(normCDF)
+vecCDF = np.vectorize(scipy.stats.norm.cdf)

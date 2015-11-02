@@ -217,5 +217,8 @@ def bond(maturity, coupon, compounding, YTM):
     print "bpv      = ", -modDuration(maturity, coupon, compounding, YTM) * 0.0001 * bondPrice(maturity, coupon, compounding, YTM)
     print "act bpv  = ", bondPrice(maturity, coupon, compounding, YTM+0.0001) - bondPrice(maturity, coupon, compounding, YTM)
 
+
+
+
 #curveJan = curveBuild('2015-01-30')
 #curveJ = yieldCurve('2015-01-30')
