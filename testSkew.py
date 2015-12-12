@@ -14,6 +14,7 @@ from scipy.stats import ncx2
 from scipy.special import ive
 from matplotlib import pyplot
 
+#think there was an issue with built in numpy function
 def logiv(v, z):
     return numpy.log(ive(v,z)) + z
 
@@ -36,6 +37,7 @@ def bsOption(expiry, strike, fwd, vol, optType):
     
     return answer
     
+#enter the shift as a positive number
 def bsShiftOption(expiry, strike, fwd, vol, shift, optType):
     return shiftLNOption(expiry, strike, fwd, vol, shift * vol, optType)
 
@@ -67,7 +69,18 @@ def normVol(expiry, strike, fwd, optType, optPrice):
     optFunc = lambda x: normOption(expiry, strike, fwd, x, optType) - optPrice
     return scipy.optimize.brentq(optFunc, a= 0.0001, b=10000)
 
+#quick CEV vectorized
+def vecPriceCev(expiry, strikeVec, fwd, vol, beta, optType):
+    answerVec = numpy.zeros(strikeVec.size)    
+    for i in range(strikeVec.size):
+        answerVec[i] = cevIntegrate(expiry, strikeVec[i], fwd, vol, beta, optType)
+    
+    return answerVec
+
 def cevIntegrate(expiry, strike, fwd, vol, beta, optType):
+    if beta == 1:
+        return bsOption(expiry, strike, fwd, vol, optType)
+    
     nu = 0.5 / (1.0 - beta)
     term1 = (4 * nu * fwd) / (vol * vol * expiry)
     term2 = (4 * nu * nu) / (vol * vol * expiry)
@@ -115,17 +128,26 @@ def cevOption(expiry, strike, fwd, vol, beta, optType):
     
     return fwd * (1 - int1) - strike * int2
     
-
-def optionGraph(expiry, strikeVec, fwd, vol, shift1, shift2, optType, graphType):
+#compareType is either "cev" or "shift"
+def optionGraph(expiry, strikeVec, fwd, vol, input1, input2, optType, graphType, compareType):
     #bs     = bsOption(expiry, strikeVec, fwd, vol1, optType)
     atmNormPrice = normOption(expiry, fwd, fwd, vol, optType)
     norm   = normOption(expiry, strikeVec, fwd, vol, optType)
-    shiftVol1 = volShiftConvert(expiry, fwd, fwd, shift1, optType, atmNormPrice)
-    shiftVol2 = volShiftConvert(expiry, fwd, fwd, shift2, optType, atmNormPrice)
+    
+    #find shift vol to match atm normal level
+    if compareType == "shift":
+        shiftVol1 = volShiftConvert(expiry, fwd, fwd, input1, optType, atmNormPrice)
+        shiftVol2 = volShiftConvert(expiry, fwd, fwd, input2, optType, atmNormPrice)
 
-    shiftAns1  = bsShiftOption(expiry, strikeVec, fwd, shiftVol1, shift1, optType)
-    shiftAns2  = bsShiftOption(expiry, strikeVec, fwd, shiftVol2, shift2, optType)
-
+        shiftAns1  = bsShiftOption(expiry, strikeVec, fwd, shiftVol1, input1, optType)
+        shiftAns2  = bsShiftOption(expiry, strikeVec, fwd, shiftVol2, input2, optType)
+    elif compareType == "cev":
+        shiftVol1 = volCevConvert(expiry, fwd, fwd, input1, optType, atmNormPrice)
+        shiftVol2 = volCevConvert(expiry, fwd, fwd, input2, optType, atmNormPrice)
+        
+        shiftAns1 = vecPriceCev(expiry, strikeVec, fwd, shiftVol1, input1, optType)
+        shiftAns2 = vecPriceCev(expiry, strikeVec, fwd, shiftVol2, input2, optType)
+        print norm
     #pyplot.plot(strikeVec, bs)
     if graphType == "price":    
         pyplot.plot(strikeVec, norm)
@@ -145,15 +167,21 @@ def normConvert(expiry, strike, fwd, optType, optPrice):
     
     return answer
 
+def volCevConvert(expiry, strike, fwd, beta, optType, optPrice):
+    optFunc = lambda x: cevIntegrate(expiry, strike, fwd, x, beta, optType) - optPrice
+    return scipy.optimize.brentq(optFunc, a = 0.0001, b = 100)
+
 #find shift vol for given zeroShift level to match given option price
 def volShiftConvert(expiry, strike, fwd, zeroShift, optType, optPrice):
     optFunc = lambda x: bsShiftOption(expiry, strike, fwd, x, zeroShift, optType) - optPrice
     return scipy.optimize.brentq(optFunc, a = 0.0001, b = 100)
     
-testVec = numpy.linspace(0,30,41)
+testVec = numpy.linspace(95,105,21)
 shiftVec = numpy.linspace(10, 100, 6)
 
 print cevIntegrate(1, 10, 100, 4, .5, "put")
 print normOption(1, 10, 100, 10, "put")
 print bsOption(1, 10, 100, .1, "put")
-optionGraph(1, testVec, 20, 20, 10, 100, "put", "vol")
+
+optionGraph(1, testVec, 100, 50, 10, 100, "put", "vol", "shift")
+#optionGraph(1, testVec, 100, 10, 1, 1, "call", "vol", "cev")
