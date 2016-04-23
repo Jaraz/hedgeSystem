@@ -361,14 +361,14 @@ class hullWhite:
         return answer.mean()
         return self.curve.discFact(evoTime) * answer.mean() * 10000
 
-model = hullWhite(0.02, 0.003, curveJ)
+#model = hullWhite(0.02, 0.003, curveJ)
 
 #spot curve
 #model.plotTCurve(0, 0, 30)
-endDate = 10
-print "Analytic    =  ", yieldCurve.swapPricer(10,10,0.023096, curveJan) * 10000
-print 'Anal test   =  ', model.swapPricer(0, 10, 10, 0.023096, "Pay", True) * 10000
+#endDate = 10
+#print "Analytic    =  ", yieldCurve.swapPricer(10,10,0.023096, curveJan) * 10000
+#print 'Anal test   =  ', model.swapPricer(0, 10, 10, 0.023096, "Pay", True) * 10000
 #print "Analytic    =  ", model.capFloorPricer(endDate, 0.020919083, "Cap") * 10000
 #print "Analytic    =  ", model.bondPrice(0,0,10.25) * 10000
 #print "Euler MC    =  ", model.eulerPath(endDate, 0.023096, 10000, 100)
-print "Monte Carlo =  ", model.exactPath(endDate, 0.023096, 10000, 1)
+#print "Monte Carlo =  ", model.exactPath(endDate, 0.023096, 10000, 1)
